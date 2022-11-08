@@ -32,6 +32,8 @@ jobs:
         os: ["ubuntu-20.04"]
     env:
       JAVA_OPTS: "-XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+    outputs:
+      hashes: ${{ steps.hash.outputs.hashes }}
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK
@@ -47,13 +49,29 @@ jobs:
           # gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }} # Value of the GPG private key to import
           # gpg-passphrase: MAVEN_GPG_PASSPHRASE # env variable for GPG private key passphrase
       - name: Build
-        run: ./mvnw -B -q -ff -ntp verify
+        id: build
+        run: |
+
+          echo "Now building"
+          ./mvnw -B -q -ff -ntp verify
+
+          echo "Now doing artifact stuff"
+          ARTIFACT_PATTERN=./target/$(./mvnw help:evaluate -Dexpression=project.artifactId -q -DforceStdout)-$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)*.jar
+          echo "ARTIFACT_PATTERN is $ARTIFACT_PATTERN"
+          echo "artifact_pattern=$ARTIFACT_PATTERN" >> "$GITHUB_OUTPUT"
+
       - name: Upload package
         uses: actions/upload-artifact@v3
         with:
           path: ./target
           name: package
           if-no-files-found: warn
+
+      - name: Generate subject
+        id: hash
+        run: |
+          echo "hashes=$(sha256sum ${{ steps.build.outputs.artifact_pattern }} | base64 -w0)" >> "$GITHUB_OUTPUT"
+
       # - name: Extract project Maven version
       #   id: projectVersion
       #   run: echo "version=$(./mvnw org.apache.maven.plugins:maven-help-plugin:3.3.0:evaluate -DforceStdout -Dexpression=project.version -q)" >>$GITHUB_OUTPUT
