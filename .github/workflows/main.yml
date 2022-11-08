@@ -34,6 +34,7 @@ jobs:
       JAVA_OPTS: "-XX:+TieredCompilation -XX:TieredStopAtLevel=1"
     outputs:
       hashes: ${{ steps.hash.outputs.hashes }}
+      artifacts: ${{ steps.build.outputs.artifacts }}
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK
