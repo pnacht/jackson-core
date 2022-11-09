@@ -57,7 +57,7 @@ jobs:
           ./mvnw -B -q -ff -ntp verify
 
           echo "Now doing artifact stuff"
-          ARTIFACT_PATTERN=./target/$(./mvnw help:evaluate -Dexpression=project.artifactId -q -DforceStdout)-$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)*.jar
+          ARTIFACT_PATTERN=$(./mvnw help:evaluate -Dexpression=project.artifactId -q -DforceStdout)-$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)*.jar
           echo "ARTIFACT_PATTERN is $ARTIFACT_PATTERN"
           echo "artifact_pattern=$ARTIFACT_PATTERN" >> "$GITHUB_OUTPUT"
 
@@ -71,7 +71,7 @@ jobs:
       - name: Generate subject
         id: hash
         run: |
-          echo "hashes=$(sha256sum ${{ steps.build.outputs.artifact_pattern }} | base64 -w0)"
+          cd ./target
           echo "hashes=$(sha256sum ${{ steps.build.outputs.artifact_pattern }} | base64 -w0)" >> "$GITHUB_OUTPUT"
 
       # - name: Extract project Maven version
