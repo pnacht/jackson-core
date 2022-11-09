@@ -71,6 +71,7 @@ jobs:
       - name: Generate subject
         id: hash
         run: |
+          echo "hashes=$(sha256sum ${{ steps.build.outputs.artifact_pattern }} | base64 -w0)"
           echo "hashes=$(sha256sum ${{ steps.build.outputs.artifact_pattern }} | base64 -w0)" >> "$GITHUB_OUTPUT"
 
       # - name: Extract project Maven version
