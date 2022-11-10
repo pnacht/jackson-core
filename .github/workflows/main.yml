@@ -23,25 +23,26 @@ permissions:
 
 jobs:
   build:
-    runs-on: "ubuntu-20.04"
-    # strategy:
-    #   fail-fast: false
-    #   matrix:
-    #     # As of Jackson 2.14 got Java 8 baseline so can build on later JDKs too
-    #     java_version: ["8", "11", "17"]
-    #     os: ["ubuntu-20.04"]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # As of Jackson 2.14 got Java 8 baseline so can build on later JDKs too
+        java_version: ["8", "11", "17"]
+        os: ["ubuntu-20.04"]
     env:
       JAVA_OPTS: "-XX:+TieredCompilation -XX:TieredStopAtLevel=1"
     outputs:
-      hashes: ${{ steps.hash.outputs.hashes }}
-      artifacts: ${{ steps.build.outputs.artifacts }}
+      digest-8: ${{ steps.digest-8.outputs.digest }}
+      digest-11: ${{ steps.digest-11.outputs.digest }}
+      digest-17: ${{ steps.digest-17.outputs.digest }}
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
           distribution: "temurin"
-          java-version: "17"
+          java-version: ${{ matrix.java_version }}
           cache: "maven"
           server-id: sonatype-nexus-snapshots
           server-username: CI_DEPLOY_USERNAME
@@ -52,27 +53,38 @@ jobs:
       - name: Build
         id: build
         run: |
-
-          echo "Now building"
           ./mvnw -B -q -ff -ntp verify
 
-          echo "Now doing artifact stuff"
           ARTIFACT_PATTERN=$(./mvnw help:evaluate -Dexpression=project.artifactId -q -DforceStdout)-$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)*.jar
-          echo "ARTIFACT_PATTERN is $ARTIFACT_PATTERN"
           echo "artifact_pattern=$ARTIFACT_PATTERN" >> "$GITHUB_OUTPUT"
 
       - name: Upload package
         uses: actions/upload-artifact@v3
         with:
           path: ./target
-          name: package
+          name: "package-${{ matrix.java_version }}"
           if-no-files-found: warn
 
-      - name: Generate subject
-        id: hash
+      # digests must be generated from within ./target.
+      # https://github.com/slsa-framework/slsa-github-generator/issues/1225
+      - name: Generate subject (Java 8)
+        id: digest-8
+        if: matrix.java_version == '8'
         run: |
           cd ./target
-          echo "hashes=$(sha256sum ${{ steps.build.outputs.artifact_pattern }} | base64 -w0)" >> "$GITHUB_OUTPUT"
+          echo "digest=$(sha256sum ${{ steps.build.outputs.artifact_pattern }} | base64 -w0)" >> "$GITHUB_OUTPUT"
+      - name: Generate subject (Java 11)
+        id: digest-11
+        if: matrix.java_version == '11'
+        run: |
+          cd ./target
+          echo "digest=$(sha256sum ${{ steps.build.outputs.artifact_pattern }} | base64 -w0)" >> "$GITHUB_OUTPUT"
+      - name: Generate subject (Java 17)
+        id: digest-17
+        if: matrix.java_version == '17'
+        run: |
+          cd ./target
+          echo "digest=$(sha256sum ${{ steps.build.outputs.artifact_pattern }} | base64 -w0)" >> "$GITHUB_OUTPUT"
 
       # - name: Extract project Maven version
       #   id: projectVersion
@@ -95,16 +107,34 @@ jobs:
       #     file: ./target/site/jacoco/jacoco.xml
       #     flags: unittests
 
-  provenance:
+  combine_digests:
     needs: [build]
+    outputs:
+      digests: ${{ steps.digests.outputs.digests }}
+    runs-on: ubuntu-20.04
+    env:
+      DIGEST_8: "${{ needs.build.outputs.digest-8 }}"
+      DIGEST_11: "${{ needs.build.outputs.digest-11 }}"
+      DIGEST_17: "${{ needs.build.outputs.digest-17 }}"
+    steps:
+      - name: Combine digests
+        id: digests
+        run: |
+          echo "$DIGEST_8"  | base64 -d >  digests.txt
+          echo "$DIGEST_11" | base64 -d >> digests.txt
+          echo "$DIGEST_17" | base64 -d >> digests.txt
+          echo "digests=$(cat digests.txt | base 64 -w0)" >> "GITHUB_OUTPUT"
+
+  provenance:
+    needs: [combine_digests]
     permissions:
       actions: read # To read the workflow path.
       id-token: write # To sign the provenance.
       contents: write # To add assets to a release.
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v1.2.1
     with:
-      base64-subjects: "${{ needs.build.outputs.hashes }}"
+      base64-subjects: "${{ needs.combine_digests.outputs.digests }}"
       # Necessary until release of @v1.2.2
       # https://github.com/slsa-framework/slsa-github-generator/issues/1163
       compile-generator: true
-      # upload-assets: true # Optional: Upload to a new release
+      upload-assets: true # Optional: Upload to a new release
