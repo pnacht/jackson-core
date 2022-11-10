@@ -125,7 +125,7 @@ jobs:
           echo "$DIGEST_11" | base64 -d >> digests.txt
           echo "$DIGEST_17" | base64 -d >> digests.txt
           cat digests.txt
-          echo "digests=$(cat digests.txt | base 64 -w0)" >> "GITHUB_OUTPUT"
+          echo "digests=$(cat digests.txt | base64 -w0)" >> "GITHUB_OUTPUT"
 
   provenance:
     needs: [combine_digests]
