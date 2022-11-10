@@ -120,7 +120,8 @@ jobs:
       - name: Combine digests
         id: digests
         run: |
-          echo "$DIGEST_8"  | base64 -d >  digests.txt
+          set -euo pipefail
+          echo "$DIGEST_8" | base64 -d > digests.txt
           echo "$DIGEST_11" | base64 -d >> digests.txt
           echo "$DIGEST_17" | base64 -d >> digests.txt
           cat digests.txt
