@@ -115,6 +115,7 @@ jobs:
       DIGEST_8: "${{ needs.build.outputs.digest-8 }}"
       DIGEST_11: "${{ needs.build.outputs.digest-11 }}"
       DIGEST_17: "${{ needs.build.outputs.digest-17 }}"
+      DIGESTS: ${{ toJson(needs.build.outputs) }}
     steps:
       - name: Combine digests
         id: digests
@@ -126,15 +127,21 @@ jobs:
           cat digests.txt
           echo "digests=$(cat digests.txt | base64 -w0)" >> "$GITHUB_OUTPUT"
 
-      - name: get digests
-        uses: actions/download-artifact@v3
-        with:
-          name: digests
-          path: ./digests
+          # echo "oh god"
+          # echo "${{ steps.build.outputs['digest-8'] }}"
+          # echo "please"
 
-      - run: |
-          ls ./digests > digest_names.txt
-          cat digest_names.txt
+          echo "$DIGESTS"
+
+      # - name: get digests
+      #   uses: actions/download-artifact@v3
+      #   with:
+      #     name: digests
+      #     path: ./digests
+
+      # - run: |
+      #     ls ./digests > digest_names.txt
+      #     cat digest_names.txt
 
   provenance:
     needs: [combine_digests]
