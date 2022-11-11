@@ -134,7 +134,7 @@ jobs:
           echo "This is the file"
           echo "$DIGESTS"
           echo "This is the combined thing"
-          echo $(echo "$DIGESTS" | jq -r '.[] | @base64d')
+          echo "$DIGESTS" | jq -r '.[] | @base64d'
 
       # - name: get digests
       #   uses: actions/download-artifact@v3
