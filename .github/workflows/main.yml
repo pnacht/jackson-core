@@ -121,17 +121,21 @@ jobs:
         id: digests
         run: |
           set -euo pipefail
-          echo "$DIGEST_8" | base64 -d > digests.txt
-          echo "$DIGEST_11" | base64 -d >> digests.txt
-          echo "$DIGEST_17" | base64 -d >> digests.txt
-          cat digests.txt
-          echo "digests=$(cat digests.txt | base64 -w0)" >> "$GITHUB_OUTPUT"
+          # echo "$DIGEST_8" | base64 -d > digests.txt
+          # echo "$DIGEST_11" | base64 -d >> digests.txt
+          # echo "$DIGEST_17" | base64 -d >> digests.txt
+          # cat digests.txt
+          # echo "digests=$(cat digests.txt | base64 -w0)" >> "$GITHUB_OUTPUT"
 
           # echo "oh god"
           # echo "${{ steps.build.outputs['digest-8'] }}"
           # echo "please"
 
           echo "$DIGESTS"
+          echo "$DIGESTS" \
+            jq -r '.[] | @base64d' \
+            sed "/^$/d" \
+            base64 -w0
 
       # - name: get digests
       #   uses: actions/download-artifact@v3
