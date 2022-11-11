@@ -33,9 +33,9 @@ jobs:
     env:
       JAVA_OPTS: "-XX:+TieredCompilation -XX:TieredStopAtLevel=1"
     outputs:
-      digest-8: ${{ steps.digest-8.outputs.digest }}
-      digest-11: ${{ steps.digest-11.outputs.digest }}
-      digest-17: ${{ steps.digest-17.outputs.digest }}
+      digest-8: ${{ steps.digests.outputs.digest-8 }}
+      digest-11: ${{ steps.digests.outputs.digest-11 }}
+      digest-17: ${{ steps.digests.outputs.digest-17 }}
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK
@@ -65,27 +65,25 @@ jobs:
           path: ./target
           name: "package-${{ matrix.java_version }}"
           if-no-files-found: warn
+          retention-days: 1
 
       # digests must be generated from within ./target.
       # https://github.com/slsa-framework/slsa-github-generator/issues/1225
-      - name: Generate subject (Java 8)
-        id: digest-8
-        if: matrix.java_version == '8'
+      - name: Generate subjects
+        id: digests
         run: |
+          DIGEST_NAME="digest-${{ matrix.java_version }}"
+          touch "./$DIGEST_NAME"
+
           cd ./target
-          echo "digest=$(sha256sum ${{ steps.build.outputs.artifact_pattern }} | base64 -w0)" >> "$GITHUB_OUTPUT"
-      - name: Generate subject (Java 11)
-        id: digest-11
-        if: matrix.java_version == '11'
-        run: |
-          cd ./target
-          echo "digest=$(sha256sum ${{ steps.build.outputs.artifact_pattern }} | base64 -w0)" >> "$GITHUB_OUTPUT"
-      - name: Generate subject (Java 17)
-        id: digest-17
-        if: matrix.java_version == '17'
-        run: |
-          cd ./target
-          echo "digest=$(sha256sum ${{ steps.build.outputs.artifact_pattern }} | base64 -w0)" >> "$GITHUB_OUTPUT"
+          echo "$DIGEST_NAME=$(sha256sum ${{ steps.build.outputs.artifact_pattern }} | base64 -w0)" >> "$GITHUB_OUTPUT"
+
+      - name: Save subject name
+        uses: actions/upload-artifact@v3
+        with:
+          path: "digest-${{ matrix.java_version }}"
+          name: digests
+          if-no-files-found: warn
 
       # - name: Extract project Maven version
       #   id: projectVersion
@@ -125,7 +123,18 @@ jobs:
           echo "$DIGEST_8" | base64 -d > digests.txt
           echo "$DIGEST_11" | base64 -d >> digests.txt
           echo "$DIGEST_17" | base64 -d >> digests.txt
+          cat digests.txt
           echo "digests=$(cat digests.txt | base64 -w0)" >> "$GITHUB_OUTPUT"
+
+      - name: get digests
+        uses: actions/download-artifact@v3
+        with:
+          name: digests
+          path: ./digests
+
+      - run: |
+          ls ./digests > digest_names.txt
+          cat digest_names.txt
 
   provenance:
     needs: [combine_digests]
