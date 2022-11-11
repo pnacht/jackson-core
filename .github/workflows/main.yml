@@ -54,8 +54,9 @@ jobs:
         id: build
         run: |
           ./mvnw -B -q -ff -ntp verify
+          mv ./target/jackson-core-2.14.0-SNAPSHOT.jar ./target/jackson-core-2.14.0-SNAPSHOT-${{ matrix.java_version }}.jar
 
-          ARTIFACT_PATTERN=$(./mvnw help:evaluate -Dexpression=project.artifactId -q -DforceStdout)-$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)*.jar
+          ARTIFACT_PATTERN=$(./mvnw help:evaluate -Dexpression=project.artifactId -q -DforceStdout)-$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)*-${{ matrix.java_version }}.jar
           echo "artifact_pattern=$ARTIFACT_PATTERN" >> "$GITHUB_OUTPUT"
 
       - name: Upload package
@@ -124,7 +125,6 @@ jobs:
           echo "$DIGEST_8" | base64 -d > digests.txt
           echo "$DIGEST_11" | base64 -d >> digests.txt
           echo "$DIGEST_17" | base64 -d >> digests.txt
-          cat digests.txt
           echo "digests=$(cat digests.txt | base64 -w0)" >> "$GITHUB_OUTPUT"
 
   provenance:
