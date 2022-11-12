@@ -73,6 +73,7 @@ jobs:
       - name: Generate subjects
         id: digests
         run: |
+          cd ./target
           echo "digest-${{ matrix.java_version }}=$(sha256sum ${{ steps.build.outputs.artifact_pattern }} | base64 -w0)" >> "$GITHUB_OUTPUT"
 
       # - name: Extract project Maven version
