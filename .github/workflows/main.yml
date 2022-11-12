@@ -54,10 +54,19 @@ jobs:
         id: build
         run: |
           ./mvnw -B -q -ff -ntp verify
+
+          # hack to give the jars unique names so we can experiment with matrix strategies
           mv ./target/jackson-core-2.14.0-SNAPSHOT.jar \
             ./target/jackson-core-2.14.0-SNAPSHOT-${{ matrix.java_version }}.jar
 
-          ARTIFACT_PATTERN=$(./mvnw help:evaluate -Dexpression=project.artifactId -q -DforceStdout)-$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)*-${{ matrix.java_version }}.jar
+          ARTIFACT_PATTERN=$( \
+            ./mvnw help:evaluate \
+              -Dexpression=project.artifactId \
+              -q -DforceStdout)-$( \
+            ./mvnw help:evaluate \
+              -Dexpression=project.version \
+              -q -DforceStdout)*-${{ matrix.java_version }}.jar
+
           echo "artifact_pattern=$ARTIFACT_PATTERN" >> "$GITHUB_OUTPUT"
 
       - name: Upload package
@@ -74,7 +83,10 @@ jobs:
         id: digests
         run: |
           cd ./target
-          echo "digest-${{ matrix.java_version }}=$(sha256sum ${{ steps.build.outputs.artifact_pattern }} | base64 -w0)" >> "$GITHUB_OUTPUT"
+          echo "digest-${{ matrix.java_version }}=$( \
+            sha256sum ${{ steps.build.outputs.artifact_pattern }} | \
+            base64 -w0 \
+          )" >> "$GITHUB_OUTPUT"
 
       # - name: Extract project Maven version
       #   id: projectVersion
