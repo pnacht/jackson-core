@@ -67,12 +67,10 @@ jobs:
           name: package
           if-no-files-found: warn
 
-      # Hashes must be calculated within ./target
       - name: Generate subject
         id: hash
         if: github.event_name != 'pull_request' && matrix.java_version == '8'
         run: |
-          cd ./target
           echo "hashes=$( \
             sha256sum ${{ steps.build.outputs.artifact_pattern }} | \
             base64 -w0 \
@@ -105,10 +103,7 @@ jobs:
       actions: read # To read the workflow path.
       id-token: write # To sign the provenance.
       contents: write # To add assets to a release.
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v1.2.1
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v1.2.2
     with:
       base64-subjects: "${{ needs.build.outputs.hashes }}"
-      # Necessary until release of @v1.2.2
-      # https://github.com/slsa-framework/slsa-github-generator/issues/1163
-      compile-generator: true
       upload-assets: true # Optional: Upload to a new release
