@@ -32,6 +32,8 @@ jobs:
         os: ["ubuntu-20.04"]
     env:
       JAVA_OPTS: "-XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+    outputs:
+      hashes: ${{ steps.hash.outputs.hashes }}
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK
@@ -47,13 +49,35 @@ jobs:
           # gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }} # Value of the GPG private key to import
           # gpg-passphrase: MAVEN_GPG_PASSPHRASE # env variable for GPG private key passphrase
       - name: Build
-        run: ./mvnw -B -q -ff -ntp verify
+        run: |
+          ./mvnw -B -q -ff -ntp verify
+
+          ARTIFACT_PATTERN=$( \
+            ./mvnw help:evaluate \
+              -Dexpression=project.artifactId -q -DforceStdout)-$( \
+            ./mvnw help:evaluate \
+              -Dexpression=project.version -q -DforceStdout)*.jar
+          echo "artifact_pattern=$ARTIFACT_PATTERN" >> "$GITHUB_OUTPUT"
+
       - name: Upload package
         uses: actions/upload-artifact@v3
+        if: github.event_name != 'pull_request' && matrix.java_version == '8'
         with:
           path: ./target
           name: package
           if-no-files-found: warn
+
+      # Hashes must be calculated within ./target
+      - name: Generate subject
+        id: hash
+        if: github.event_name != 'pull_request' && matrix.java_version == '8'
+        run: |
+          cd ./target
+          echo "hashes=$( \
+            sha256sum ${{ steps.build.outputs.artifact_pattern }} | \
+            base64 -w0 \
+          )" >> "$GITHUB_OUTPUT"
+
       # - name: Extract project Maven version
       #   id: projectVersion
       #   run: echo "version=$(./mvnw org.apache.maven.plugins:maven-help-plugin:3.3.0:evaluate -DforceStdout -Dexpression=project.version -q)" >>$GITHUB_OUTPUT
@@ -74,3 +98,17 @@ jobs:
       #     token: ${{ secrets.CODECOV_TOKEN }}
       #     file: ./target/site/jacoco/jacoco.xml
       #     flags: unittests
+
+  provenance:
+    needs: [build]
+    permissions:
+      actions: read # To read the workflow path.
+      id-token: write # To sign the provenance.
+      contents: write # To add assets to a release.
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v1.2.1
+    with:
+      base64-subjects: "${{ needs.build.outputs.hashes }}"
+      # Necessary until release of @v1.2.2
+      # https://github.com/slsa-framework/slsa-github-generator/issues/1163
+      compile-generator: true
+      upload-assets: true # Optional: Upload to a new release
