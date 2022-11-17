@@ -33,7 +33,9 @@ jobs:
     env:
       JAVA_OPTS: "-XX:+TieredCompilation -XX:TieredStopAtLevel=1"
     outputs:
-      hashes: ${{ steps.hash.outputs.hashes }}
+      hash-8: ${{ steps.hash.outputs.hash-8 }}
+      hash-11: ${{ steps.hash.outputs.hash-11 }}
+      hash-17: ${{ steps.hash.outputs.hash-17 }}
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK
@@ -53,30 +55,32 @@ jobs:
         run: |
           ./mvnw -B -q -ff -ntp verify
 
+          # hack to give the jars unique names so we can experiment with matrix strategies
+          mv ./target/jackson-core-2.14.0-SNAPSHOT.jar \
+            ./target/jackson-core-2.14.0-SNAPSHOT-${{ matrix.java_version }}.jar
+
           ARTIFACT_PATTERN=$( \
             ./mvnw help:evaluate \
               -Dexpression=project.artifactId -q -DforceStdout)-$( \
             ./mvnw help:evaluate \
-              -Dexpression=project.version -q -DforceStdout)*.jar
+              -Dexpression=project.version -q -DforceStdout)*-${{ matrix.java_version }}.jar
           echo "artifact_pattern=$ARTIFACT_PATTERN" >> "$GITHUB_OUTPUT"
 
       - name: Upload package
         uses: actions/upload-artifact@v3
-        if: github.event_name != 'pull_request' && matrix.java_version == '8'
         with:
           path: ./target
-          name: package
+          name: "package-${{ matrix.java_version }}"
           if-no-files-found: warn
 
       # Until generator_generic_slsa3@v1.2.3, calculate hashes from target
       # https://github.com/slsa-framework/slsa-github-generator/issues/1225
       - name: Generate subject
         id: hash
-        if: github.event_name != 'pull_request' && matrix.java_version == '8'
         run: |
           cd ./target
 
-          echo "hashes=$( \
+          echo "hash-${{ matrix.java_version }}=$( \
             sha256sum ${{ steps.build.outputs.artifact_pattern }} | \
             base64 -w0 \
           )" >> "$GITHUB_OUTPUT"
@@ -102,13 +106,27 @@ jobs:
       #     file: ./target/site/jacoco/jacoco.xml
       #     flags: unittests
 
-  provenance:
+  combine_hashes:
     needs: [build]
+    runs-on: ubuntu-20.04
+    outputs:
+      hashes: ${{ steps.hashes.outputs.hashes }}
+    env:
+      HASHES: ${{ toJSON(needs.build.outputs )}}
+    steps:
+      - id: hashes
+        run: |
+          echo "$HASHES" | jq -r '.[] | @base64d' | sed "/^$/d"
+          echo "$HASHES" | jq -r '.[] | @base64d' | sed "/^$/d" > hashes.txt
+          echo "hashes=$(cat hashes.txt | base64 -w0)" >> "$GITHUB_OUTPUT"
+
+  provenance:
+    needs: [combine_hashes]
     permissions:
       actions: read # To read the workflow path.
       id-token: write # To sign the provenance.
       contents: write # To add assets to a release.
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v1.2.2
     with:
-      base64-subjects: "${{ needs.build.outputs.hashes }}"
+      base64-subjects: "${{ needs.combine_hashes.outputs.hashes }}"
       upload-assets: true # Optional: Upload to a new release
