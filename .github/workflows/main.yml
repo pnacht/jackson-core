@@ -53,7 +53,7 @@ jobs:
         run: |
           ./mvnw -B -q -ff -ntp verify
 
-          ARTIFACT_PATTERN=$( \
+          ARTIFACT_PATTERN=./target/$( \
             ./mvnw help:evaluate \
               -Dexpression=project.artifactId -q -DforceStdout)-$( \
             ./mvnw help:evaluate \
