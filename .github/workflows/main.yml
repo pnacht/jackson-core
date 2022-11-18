@@ -112,11 +112,10 @@ jobs:
     outputs:
       hashes: ${{ steps.hashes.outputs.hashes }}
     env:
-      HASHES: ${{ toJSON(needs.build.outputs )}}
+      HASHES: ${{ toJSON(needs.build.outputs) }}
     steps:
       - id: hashes
         run: |
-          echo "$HASHES" | jq -r '.[] | @base64d' | sed "/^$/d"
           echo "$HASHES" | jq -r '.[] | @base64d' | sed "/^$/d" > hashes.txt
           echo "hashes=$(cat hashes.txt | base64 -w0)" >> "$GITHUB_OUTPUT"
 
