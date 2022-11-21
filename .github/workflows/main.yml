@@ -64,11 +64,11 @@ jobs:
         uses: actions/upload-artifact@v3
         if: github.event_name != 'pull_request' && matrix.java_version == '8'
         with:
-          path: ./target
+          path: ./target/*.jar
           name: package
           if-no-files-found: warn
 
-      # Until generator_generic_slsa3@v1.2.3, calculate hashes from target
+      # Until generator_generic_slsa3@v1.2.3, calculate hashes from ./target
       # https://github.com/slsa-framework/slsa-github-generator/issues/1225
       - name: Generate subject
         id: hash
