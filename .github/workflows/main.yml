@@ -60,14 +60,6 @@ jobs:
               -Dexpression=project.version -q -DforceStdout)*.jar
           echo "artifact_pattern=$ARTIFACT_PATTERN" >> "$GITHUB_OUTPUT"
 
-      - name: Upload package
-        uses: actions/upload-artifact@v3
-        if: github.event_name != 'pull_request' && matrix.java_version == '8'
-        with:
-          path: ./target/*.jar
-          name: package
-          if-no-files-found: warn
-
       # Until generator_generic_slsa3@v1.2.3, calculate hashes from ./target
       # https://github.com/slsa-framework/slsa-github-generator/issues/1225
       - name: Generate subject
@@ -81,26 +73,26 @@ jobs:
             base64 -w0 \
           )" >> "$GITHUB_OUTPUT"
 
-      # - name: Extract project Maven version
-      #   id: projectVersion
-      #   run: echo "version=$(./mvnw org.apache.maven.plugins:maven-help-plugin:3.3.0:evaluate -DforceStdout -Dexpression=project.version -q)" >>$GITHUB_OUTPUT
-      # - name: Deploy snapshot
-      #   if: github.event_name != 'pull_request' && matrix.java_version == '8' && endsWith(steps.projectVersion.outputs.version, '-SNAPSHOT')
-      #   env:
-      #     CI_DEPLOY_USERNAME: ${{ secrets.CI_DEPLOY_USERNAME }}
-      #     CI_DEPLOY_PASSWORD: ${{ secrets.CI_DEPLOY_PASSWORD }}
-      #     # MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
-      #   run: ./mvnw -B -q -ff -DskipTests -ntp source:jar deploy
-      # - name: Generate code coverage
-      #   if: github.event_name != 'pull_request' && matrix.java_version == '8'
-      #   run: ./mvnw -B -q -ff -ntp test
-      # - name: Publish code coverage
-      #   if: github.event_name != 'pull_request' && matrix.java_version == '8'
-      #   uses: codecov/codecov-action@v3
-      #   with:
-      #     token: ${{ secrets.CODECOV_TOKEN }}
-      #     file: ./target/site/jacoco/jacoco.xml
-      #     flags: unittests
+      - name: Extract project Maven version
+        id: projectVersion
+        run: echo "version=$(./mvnw org.apache.maven.plugins:maven-help-plugin:3.3.0:evaluate -DforceStdout -Dexpression=project.version -q)" >>$GITHUB_OUTPUT
+      - name: Deploy snapshot
+        if: github.event_name != 'pull_request' && matrix.java_version == '8' && endsWith(steps.projectVersion.outputs.version, '-SNAPSHOT')
+        env:
+          CI_DEPLOY_USERNAME: ${{ secrets.CI_DEPLOY_USERNAME }}
+          CI_DEPLOY_PASSWORD: ${{ secrets.CI_DEPLOY_PASSWORD }}
+          # MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: ./mvnw -B -q -ff -DskipTests -ntp source:jar deploy
+      - name: Generate code coverage
+        if: github.event_name != 'pull_request' && matrix.java_version == '8'
+        run: ./mvnw -B -q -ff -ntp test
+      - name: Publish code coverage
+        if: github.event_name != 'pull_request' && matrix.java_version == '8'
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./target/site/jacoco/jacoco.xml
+          flags: unittests
 
   provenance:
     needs: [build]
