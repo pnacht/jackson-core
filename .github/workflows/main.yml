@@ -16,10 +16,12 @@ on:
     paths-ignore:
       - "README.md"
       - "release-notes/*"
-  workflow_dispatch:
 
 permissions:
   contents: read
+
+env:
+  JAVA_OPTS: "-XX:+TieredCompilation -XX:TieredStopAtLevel=1"
 
 jobs:
   build:
@@ -30,10 +32,6 @@ jobs:
         # As of Jackson 2.14 got Java 8 baseline so can build on later JDKs too
         java_version: ["8", "11", "17"]
         os: ["ubuntu-20.04"]
-    env:
-      JAVA_OPTS: "-XX:+TieredCompilation -XX:TieredStopAtLevel=1"
-    outputs:
-      hashes: ${{ steps.hash.outputs.hashes }}
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK
@@ -43,34 +41,15 @@ jobs:
           java-version: ${{ matrix.java_version }}
           cache: "maven"
       - name: Build
-        id: build
         run: |
           ./mvnw -B -q -ff -ntp verify
-
-          ARTIFACT_PATTERN=$( \
-            ./mvnw help:evaluate \
-              -Dexpression=project.artifactId -q -DforceStdout)-$( \
-            ./mvnw help:evaluate \
-              -Dexpression=project.version -q -DforceStdout)*.jar
-          echo "artifact_pattern=$ARTIFACT_PATTERN" >> "$GITHUB_OUTPUT"
-
-      # Until generator_generic_slsa3@v1.2.3, calculate hashes from ./target
-      # https://github.com/slsa-framework/slsa-github-generator/issues/1225
-      - name: Generate subject
-        id: hash
-        if: github.event_name != 'pull_request' && matrix.java_version == '8'
-        run: |
-          cd ./target
-
-          echo "hashes=$( \
-            sha256sum ${{ steps.build.outputs.artifact_pattern }} | \
-            base64 -w0 \
-          )" >> "$GITHUB_OUTPUT"
 
   deploy:
     needs: [build]
     runs-on: "ubuntu-20.04"
     if: github.event_name != 'pull_request'
+    outputs:
+      hashes: ${{ steps.hash.outputs.hashes }}
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK
@@ -93,12 +72,33 @@ jobs:
               -DforceStdout -Dexpression=project.version -q \
           )" >> "$GITHUB_OUTPUT"
       - name: Deploy snapshot
+        id: deploy
         if: endsWith(steps.projectVersion.outputs.version, '-SNAPSHOT')
         env:
           CI_DEPLOY_USERNAME: ${{ secrets.CI_DEPLOY_USERNAME }}
           CI_DEPLOY_PASSWORD: ${{ secrets.CI_DEPLOY_PASSWORD }}
           # MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
-        run: ./mvnw -B -q -ff -DskipTests -ntp source:jar deploy
+        run: |
+          ./mvnw -B -q -ff -DskipTests -ntp source:jar deploy
+
+          ARTIFACT_PATTERN=$( \
+            ./mvnw help:evaluate \
+              -Dexpression=project.artifactId -q -DforceStdout)-$( \
+            ./mvnw help:evaluate \
+              -Dexpression=project.version -q -DforceStdout)*.jar
+          echo "artifact_pattern=$ARTIFACT_PATTERN" >> "$GITHUB_OUTPUT"
+      # Until generator_generic_slsa3@v1.2.3, calculate hashes from ./target
+      # https://github.com/slsa-framework/slsa-github-generator/issues/1225
+      - name: Generate subject
+        id: hash
+        if: endsWith(steps.projectVersion.outputs.version, '-SNAPSHOT')
+        run: |
+          cd ./target
+
+          echo "hashes=$( \
+            sha256sum ${{ steps.deploy.outputs.artifact_pattern }} | \
+            base64 -w0 \
+          )" >> "$GITHUB_OUTPUT"
 
   coverage:
     needs: [build]
@@ -122,12 +122,12 @@ jobs:
           flags: unittests
 
   provenance:
-    needs: [build]
+    needs: [deploy]
     permissions:
       actions: read # To read the workflow path.
       id-token: write # To sign the provenance.
       contents: write # To add assets to a release.
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v1.2.2
     with:
-      base64-subjects: "${{ needs.build.outputs.hashes }}"
+      base64-subjects: "${{ needs.deploy.outputs.hashes }}"
       upload-assets: true # Optional: Upload to a new release
