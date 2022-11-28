@@ -5,6 +5,7 @@ on:
       - master
       - "3.0"
       - "2.14"
+      - "learning_experience"
     paths-ignore:
       - "README.md"
       - "release-notes/*"
@@ -109,29 +110,34 @@ jobs:
       #     file: ./target/site/jacoco/jacoco.xml
       #     flags: unittests
 
-  combine_digests:
-    needs: [build]
-    runs-on: ubuntu-20.04
-    outputs:
-      digests: ${{ steps.digests.outputs.digests }}
-    env:
-      DIGESTS: ${{ toJson(needs.build.outputs) }}
-    steps:
-      - name: Combine digests
-        id: digests
-        run: |
-          echo "$DIGESTS" | jq -r '.[] | @base64d' | sed "/^$/d" > digests.txt
-          echo "digests=$(cat digests.txt | base64 -w0)" >> "$GITHUB_OUTPUT"
+  # combine_digests:
+  #   needs: [build]
+  #   runs-on: ubuntu-20.04
+  #   outputs:
+  #     digests: ${{ steps.digests.outputs.digests }}
+  #   env:
+  #     DIGESTS: ${{ toJson(needs.build.outputs) }}
+  #   steps:
+  #     - name: Combine digests
+  #       id: digests
+  #       run: |
+  #         echo "$DIGESTS" | jq -r '.[] | @base64d' | sed "/^$/d" > digests.txt
+  #         echo "digests=$(cat digests.txt | base64 -w0)" >> "$GITHUB_OUTPUT"
 
   provenance:
-    needs: [combine_digests]
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        # As of Jackson 2.14 got Java 8 baseline so can build on later JDKs too
+        java_version: ["8", "11", "17"]
     permissions:
       actions: read # To read the workflow path.
       id-token: write # To sign the provenance.
       contents: write # To add assets to a release.
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v1.2.1
     with:
-      base64-subjects: "${{ needs.combine_digests.outputs.digests }}"
+      base64-subjects: "${{ needs.build.outputs[format('digest-{0}', matrix.java_version)] }}"
       # Necessary until release of @v1.2.2
       # https://github.com/slsa-framework/slsa-github-generator/issues/1163
       compile-generator: true
